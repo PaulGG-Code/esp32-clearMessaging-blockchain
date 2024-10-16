@@ -7,8 +7,31 @@
 #define MESSAGE_ENDPOINT "send_message"
 #define GET_DEVICES_ENDPOINT "get_registered_devices"
 #define GET_MESSAGES_ENDPOINT "get_messages"
-#define DEVICE_ID "esp32_device_2"
 
+// Function to get the unique device ID based on the ESP32's MAC address
+String getDeviceID() {
+  uint64_t chipId = ESP.getEfuseMac(); // The chip ID is the MAC address of the ESP32
+
+  // Extract the full 48-bit MAC address
+  uint8_t mac[6];
+  for (int i = 0; i < 6; i++) {
+    mac[i] = (chipId >> (8 * (5 - i))) & 0xFF;
+  }
+
+  // Format the MAC address as a hexadecimal string for uniqueness
+  String deviceID = "esp32_device_";
+  for (int i = 0; i < 6; i++) {
+    if (mac[i] < 16) deviceID += "0";  // Add a leading zero if needed
+    deviceID += String(mac[i], HEX);
+  }
+  
+  // Optional: Convert the MAC address to uppercase
+  deviceID.toUpperCase();
+
+  return deviceID;
+}
+
+String DEVICE_ID;  // Dynamically assigned device ID
 String recipient_device_id;
 bool registered = false;
 
@@ -16,8 +39,12 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Setup started");
 
+  // Generate and assign the dynamic device ID
+  DEVICE_ID = getDeviceID();
+  Serial.println("Assigned DEVICE_ID: " + DEVICE_ID);
+
   // Initialize WiFi
-  WiFi.begin("WIFI SSID HERE", "WIFI PASS HERE");  // Replace with your WiFi credentials
+  WiFi.begin("YOUR WIFI SSID HERE", "YOUR PASS HERE");  // Replace with your WiFi credentials
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.println("Connecting to WiFi...");
@@ -54,6 +81,7 @@ void loop() {
 // Register device on blockchain via backend
 void registerDevice() {
   Serial.println("Attempting to register device...");
+  Serial.println("Device ID: " + DEVICE_ID);  // Print the dynamic device ID
 
   if (WiFi.status() == WL_CONNECTED && !registered) {
     HTTPClient http;
@@ -62,7 +90,7 @@ void registerDevice() {
     http.addHeader("Content-Type", "application/json");
 
     // Prepare the JSON payload
-    String postData = "{\"device_id\":\"" + String(DEVICE_ID) + "\"}";
+    String postData = "{\"device_id\":\"" + DEVICE_ID + "\"}";
     Serial.println("Sending JSON payload: " + postData);
 
     int httpResponseCode = http.POST(postData);
@@ -125,7 +153,7 @@ void sendMessage(String message) {
   recipient_device_id.trim();
 
   // Prepare the JSON payload
-  String postData = "{\"sender\":\"" + String(DEVICE_ID) + "\", \"recipient\":\"" + recipient_device_id + "\", \"message\":\"" + message + "\"}";
+  String postData = "{\"sender\":\"" + DEVICE_ID + "\", \"recipient\":\"" + recipient_device_id + "\", \"message\":\"" + message + "\"}";
 
   // Debugging: Print the full JSON payload before sending
   Serial.println("Sending message payload: " + postData);
@@ -157,7 +185,7 @@ void sendMessage(String message) {
 void receiveMessages() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    http.begin(String(SERVER_URL) + String(GET_MESSAGES_ENDPOINT) + "?recipient=" + String(DEVICE_ID));
+    http.begin(String(SERVER_URL) + String(GET_MESSAGES_ENDPOINT) + "?recipient=" + DEVICE_ID);
     int httpResponseCode = http.GET();
 
     if (httpResponseCode > 0) {
